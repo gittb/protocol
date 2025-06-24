@@ -1,6 +1,7 @@
 use crate::console::Console;
 use lazy_static::lazy_static;
 use nvml_wrapper::Nvml;
+use std::path::Path;
 use shared::models::node::GpuSpecs;
 use std::sync::Mutex;
 
@@ -47,12 +48,21 @@ fn get_gpu_status() -> Vec<GpuDevice> {
 
     // Initialize NVML if not already initialized
     if nvml_guard.is_none() {
-        match Nvml::builder()
-            .lib_path(std::ffi::OsStr::new(
-                "/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1",
-            ))
-            .init()
-        {
+        let candidate_paths = [
+            "/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1",
+            "/usr/lib/libnvidia-ml.so.1",
+        ];
+
+        let mut builder = Nvml::builder();
+
+        for path in &candidate_paths {
+            if Path::new(path).exists() {
+                builder = builder.lib_path(std::ffi::OsStr::new(path));
+                break;
+            }
+        }
+
+        match builder.init() {
             Ok(nvml) => *nvml_guard = Some(nvml),
             Err(e) => {
                 Console::user_error(&format!("Failed to initialize NVML: {}", e));
